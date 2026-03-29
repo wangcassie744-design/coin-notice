@@ -23,22 +23,27 @@ jobs:
           import requests
           from datetime import datetime, timedelta
 
-          # 钉钉 Webhook
+          # ===================== 配置 =====================
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          
-          # 官方稳定RSS源
+          # 央行官方纪念币公告 RSS（100% 稳定）
           RSS_URL = "https://www.pbc.gov.cn/goutongjiaoliu/146984/146990/index.rss"
+          # =================================================
 
-          # 获取数据
-          feed = feedparser.parse(RSS_URL)
-          if feed.bozo:
-              print("获取数据失败")
+          # 抓取数据（官方源无需复杂请求头）
+          try:
+              feed = feedparser.parse(RSS_URL)
+          except Exception as e:
+              print(f"网络请求失败: {e}")
               exit()
 
-          # 只发最近1小时的新公告
+          if feed.bozo:
+              print("RSS 解析失败")
+              exit()
+
+          # 只发送最近1小时内、包含「纪念币」关键词的新公告
           one_hour_ago = datetime.now() - timedelta(hours=1)
 
-          for entry in feed.entries[:3]:
+          for entry in feed.entries[:5]:
               try:
                   pub_time = datetime(*entry.published_parsed[:6])
                   if pub_time >= one_hour_ago and "纪念币" in entry.title:
@@ -50,6 +55,7 @@ jobs:
                       }
                       requests.post(DINGTALK_WEBHOOK, json=message)
                       print("已发送：" + entry.title)
-              except:
+              except Exception as e:
+                  print(f"处理条目失败: {e}")
                   continue
           EOF
