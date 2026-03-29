@@ -1,0 +1,56 @@
+name: 纪念币公告定时提醒
+on:
+  schedule:
+    - cron: '0 */1 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置Python环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install feedparser requests
+
+      - name: 抓取公告并发送钉钉
+        run: |
+          python - << 'EOF'
+          import feedparser
+          import requests
+          from datetime import datetime, timedelta
+
+          # ==========================================
+          # 【重要】把下面这行换成你的钉钉机器人Webhook
+          DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
+          # ==========================================
+
+          RSS_URL = "https://rsshub.app/chngc/notice?keyword=纪念币,预约,发行"
+
+          # 获取RSS数据
+          feed = feedparser.parse(RSS_URL)
+          if feed.bozo:
+              print("获取数据失败")
+              exit()
+
+          # 只发送最近1小时的新消息
+          one_hour_ago = datetime.now() - timedelta(hours=1)
+
+          for entry in feed.entries[:3]:
+              try:
+                  pub_time = datetime(*entry.published_parsed[:6])
+                  if pub_time >= one_hour_ago:
+                      message = {
+                          "msgtype": "text",
+                          "text": {
+                              "content": f"【纪念币新公告】\n标题：{entry.title}\n链接：{entry.link}"
+                          }
+                      }
+                      requests.post(DINGTALK_WEBHOOK, json=message)
+                      print("已发送：" + entry.title)
+              except:
+                  continue
+          EOF
