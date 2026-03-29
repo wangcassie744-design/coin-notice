@@ -21,59 +21,61 @@ jobs:
           python - << 'EOF'
           import requests
           from bs4 import BeautifulSoup
-          from datetime import datetime, timedelta
+          from datetime import datetime
           import re
 
           # ===================== 配置 =====================
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          # 中国金币网公告页面
           NOTICE_URL = "https://www.chngc.net/common/news"
           # =================================================
 
-          # 请求头（模拟浏览器访问）
           headers = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               "Referer": "https://www.chngc.net/"
           }
 
           try:
-              # 1. 获取公告页面
               response = requests.get(NOTICE_URL, headers=headers, timeout=15)
               response.encoding = "utf-8"
+              
               if response.status_code != 200:
-                  print(f"访问页面失败，状态码: {response.status_code}")
+                  print("访问失败")
                   exit()
 
-              # 2. 解析页面提取公告
               soup = BeautifulSoup(response.text, "html.parser")
               news_list = soup.find_all("li", class_="clearfix")
 
-              print(f"找到 {len(news_list)} 条公告")
+              print(f"共找到 {len(news_list)} 条公告")
 
-              # 3. 过滤最近1小时、含「纪念币」的公告
-              one_hour_ago = datetime.now() - timedelta(hours=1)
-              for news in news_list[:5]:
+              # 收集最新10条【纪念币】相关公告
+              count = 0
+              for news in news_list:
+                  if count >= 10:
+                      break
+                      
                   try:
                       title_tag = news.find("a")
                       title = title_tag.get_text(strip=True)
                       link = "https://www.chngc.net" + title_tag["href"]
-                      date_str = news.find("span").get_text(strip=True)
-                      pub_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
 
-                      if pub_time >= one_hour_ago and "纪念币" in title:
+                      # 只发送包含纪念币的内容
+                      if "纪念币" in title or "贵金属" in title or "发行" in title:
                           message = {
                               "msgtype": "text",
                               "text": {
-                                  "content": f"【纪念币新公告】\n标题：{title}\n链接：{link}"
+                                  "content": f"【纪念币公告】\n标题：{title}\n链接：{link}"
                               }
                           }
                           requests.post(DINGTALK_WEBHOOK, json=message)
-                          print("已发送：" + title)
+                          print(f"已发送：{title}")
+                          count += 1
+
                   except Exception as e:
-                      print(f"处理公告失败: {e}")
                       continue
 
+              print(f"本次共发送 {count} 条纪念币公告")
+
           except Exception as e:
-              print(f"全局错误: {e}")
+              print(f"错误：{e}")
               exit()
           EOF
