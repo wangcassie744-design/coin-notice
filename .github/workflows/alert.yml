@@ -23,20 +23,27 @@ jobs:
           import requests
           from datetime import datetime, timedelta
 
-          # ==========================================
-          # 【重要】把下面这行换成你的钉钉机器人Webhook
+          # 钉钉 Webhook（你自己的）
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          # ==========================================
 
+          # 纪念币 RSS 地址
           RSS_URL = "https://rsshub.app/chngc/notice?keyword=纪念币,预约,发行"
 
-          # 获取RSS数据
-          feed = feedparser.parse(RSS_URL)
+          # 请求头（防拦截）
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+              "Referer": "https://www.chngc.net/"
+          }
+
+          # 获取数据
+          response = requests.get(RSS_URL, headers=headers)
+          feed = feedparser.parse(response.content)
+
           if feed.bozo:
               print("获取数据失败")
               exit()
 
-          # 只发送最近1小时的新消息
+          # 最近1小时内的新消息
           one_hour_ago = datetime.now() - timedelta(hours=1)
 
           for entry in feed.entries[:3]:
