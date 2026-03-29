@@ -25,37 +25,47 @@ jobs:
 
           # ===================== 配置 =====================
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          # 央行官方纪念币公告 RSS（100% 稳定）
           RSS_URL = "https://www.pbc.gov.cn/goutongjiaoliu/146984/146990/index.rss"
           # =================================================
 
-          # 抓取数据（官方源无需复杂请求头）
+          # 调试：先直接获取内容，看是否能拿到数据
           try:
-              feed = feedparser.parse(RSS_URL)
-          except Exception as e:
-              print(f"网络请求失败: {e}")
-              exit()
-
-          if feed.bozo:
-              print("RSS 解析失败")
-              exit()
-
-          # 只发送最近1小时内、包含「纪念币」关键词的新公告
-          one_hour_ago = datetime.now() - timedelta(hours=1)
-
-          for entry in feed.entries[:5]:
-              try:
-                  pub_time = datetime(*entry.published_parsed[:6])
-                  if pub_time >= one_hour_ago and "纪念币" in entry.title:
-                      message = {
-                          "msgtype": "text",
-                          "text": {
-                              "content": f"【纪念币新公告】\n标题：{entry.title}\n链接：{entry.link}"
+              headers = {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  "Referer": "https://www.pbc.gov.cn/"
+              }
+              response = requests.get(RSS_URL, headers=headers, timeout=15)
+              print(f"状态码: {response.status_code}")
+              print(f"内容长度: {len(response.content)}")
+              
+              # 尝试解析
+              feed = feedparser.parse(response.content)
+              
+              if feed.bozo:
+                  print(f"解析错误详情: {feed.bozo_exception}")
+                  exit()
+                  
+              print(f"成功解析到 {len(feed.entries)} 条公告")
+              
+              # 只发送最近1小时内、包含「纪念币」关键词的新公告
+              one_hour_ago = datetime.now() - timedelta(hours=1)
+              for entry in feed.entries[:5]:
+                  try:
+                      pub_time = datetime(*entry.published_parsed[:6])
+                      if pub_time >= one_hour_ago and "纪念币" in entry.title:
+                          message = {
+                              "msgtype": "text",
+                              "text": {
+                                  "content": f"【纪念币新公告】\n标题：{entry.title}\n链接：{entry.link}"
+                              }
                           }
-                      }
-                      requests.post(DINGTALK_WEBHOOK, json=message)
-                      print("已发送：" + entry.title)
-              except Exception as e:
-                  print(f"处理条目失败: {e}")
-                  continue
+                          requests.post(DINGTALK_WEBHOOK, json=message)
+                          print("已发送：" + entry.title)
+                  except Exception as e:
+                      print(f"处理条目失败: {e}")
+                      continue
+                  
+          except Exception as e:
+              print(f"全局错误: {e}")
+              exit()
           EOF
