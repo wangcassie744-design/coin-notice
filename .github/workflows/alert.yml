@@ -1,7 +1,7 @@
 name: 纪念币公告定时提醒
 on:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: '0 */1 * * *'  # 每小时一次
   workflow_dispatch:
 
 jobs:
@@ -19,17 +19,37 @@ jobs:
       - name: 抓取公告并发送钉钉
         run: |
           python - << 'EOF'
+          import feedparser
           import requests
+          from datetime import datetime, timedelta
 
-          # ===================== 测试：直接发消息 =====================
+          # 钉钉 Webhook
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
           
-          message = {
-              "msgtype": "text",
-              "text": {
-                  "content": "【测试】纪念币提醒程序运行正常！"
-              }
-          }
-          requests.post(DINGTALK_WEBHOOK, json=message)
-          print("测试消息已发送")
+          # 官方稳定RSS源
+          RSS_URL = "https://www.pbc.gov.cn/goutongjiaoliu/146984/146990/index.rss"
+
+          # 获取数据
+          feed = feedparser.parse(RSS_URL)
+          if feed.bozo:
+              print("获取数据失败")
+              exit()
+
+          # 只发最近1小时的新公告
+          one_hour_ago = datetime.now() - timedelta(hours=1)
+
+          for entry in feed.entries[:3]:
+              try:
+                  pub_time = datetime(*entry.published_parsed[:6])
+                  if pub_time >= one_hour_ago and "纪念币" in entry.title:
+                      message = {
+                          "msgtype": "text",
+                          "text": {
+                              "content": f"【纪念币新公告】\n标题：{entry.title}\n链接：{entry.link}"
+                          }
+                      }
+                      requests.post(DINGTALK_WEBHOOK, json=message)
+                      print("已发送：" + entry.title)
+              except:
+                  continue
           EOF
