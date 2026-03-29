@@ -23,7 +23,6 @@ jobs:
           from bs4 import BeautifulSoup
           import os
 
-          # 配置
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
           URL = "https://www.chngc.net/common/news"
           FILE_PATH = "/tmp/last_notice.txt"
@@ -32,20 +31,17 @@ jobs:
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
 
-          # 抓取页面
+          # 获取页面
           try:
               res = requests.get(URL, headers=headers, timeout=10)
               res.encoding = "utf-8"
               soup = BeautifulSoup(res.text, "html.parser")
           except Exception as e:
-              msg = {
-                  "msgtype": "text",
-                  "text": {"content": "⚠️ 获取公告失败"}
-              }
-              requests.post(DINGTALK_WEBHOOK, json=msg)
+              content = "纪念币：获取公告失败"
+              requests.post(DINGTALK_WEBHOOK, json={"msgtype": "text", "text": {"content": content}})
               exit()
 
-          # 查找纪念币公告
+              # 查找公告
           items = soup.find_all("li", class_="clearfix")
           latest_title = None
           latest_link = None
@@ -61,7 +57,7 @@ jobs:
               except:
                   continue
 
-          # 读取上一次记录
+          # 上次记录
           last_sent = ""
           if os.path.exists(FILE_PATH):
               with open(FILE_PATH, "r", encoding="utf-8") as f:
@@ -69,24 +65,18 @@ jobs:
 
           current_info = f"{latest_title}|{latest_link}" if latest_title else ""
 
-          # 强制每次都发消息
-          if latest_title:
-              if current_info != last_sent:
-                  content = f"【纪念币公告有更新】\n标题：{latest_title}\n链接：{latest_link}"
-                  with open(FILE_PATH, "w", encoding="utf-8") as f:
-                      f.write(current_info)
-              else:
-                  content = "暂无公告更新"
+          # 构造消息（必带关键词“纪念币”）
+          if latest_title and current_info != last_sent:
+              content = f"【纪念币公告有更新】\n标题：{latest_title}\n链接：{latest_link}"
+              with open(FILE_PATH, "w", encoding="utf-8") as f:
+                  f.write(current_info)
           else:
-              content = "暂无公告更新"
+              content = "纪念币：暂无公告更新"
 
-          # 发送钉钉
-          requests.post(
-              DINGTALK_WEBHOOK,
-              json={
-                  "msgtype": "text",
-                  "text": {"content": content}
-              }
-          )
-          print("已发送：", content)
+          # 发送
+          requests.post(DINGTALK_WEBHOOK, json={
+              "msgtype": "text",
+              "text": {"content": content}
+          })
+          print("发送内容：", content)
           EOF
