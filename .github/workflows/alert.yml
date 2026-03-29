@@ -14,57 +14,65 @@ jobs:
           python-version: '3.11'
 
       - name: 安装依赖
-        run: pip install feedparser requests
+        run: pip install requests beautifulsoup4
 
       - name: 抓取公告并发送钉钉
         run: |
           python - << 'EOF'
-          import feedparser
           import requests
+          from bs4 import BeautifulSoup
           from datetime import datetime, timedelta
+          import re
 
           # ===================== 配置 =====================
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          RSS_URL = "https://www.pbc.gov.cn/goutongjiaoliu/146984/146990/index.rss"
+          # 中国金币网公告页面
+          NOTICE_URL = "https://www.chngc.net/common/news"
           # =================================================
 
-          # 调试：先直接获取内容，看是否能拿到数据
+          # 请求头（模拟浏览器访问）
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Referer": "https://www.chngc.net/"
+          }
+
           try:
-              headers = {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                  "Referer": "https://www.pbc.gov.cn/"
-              }
-              response = requests.get(RSS_URL, headers=headers, timeout=15)
-              print(f"状态码: {response.status_code}")
-              print(f"内容长度: {len(response.content)}")
-              
-              # 尝试解析
-              feed = feedparser.parse(response.content)
-              
-              if feed.bozo:
-                  print(f"解析错误详情: {feed.bozo_exception}")
+              # 1. 获取公告页面
+              response = requests.get(NOTICE_URL, headers=headers, timeout=15)
+              response.encoding = "utf-8"
+              if response.status_code != 200:
+                  print(f"访问页面失败，状态码: {response.status_code}")
                   exit()
-                  
-              print(f"成功解析到 {len(feed.entries)} 条公告")
-              
-              # 只发送最近1小时内、包含「纪念币」关键词的新公告
+
+              # 2. 解析页面提取公告
+              soup = BeautifulSoup(response.text, "html.parser")
+              news_list = soup.find_all("li", class_="clearfix")
+
+              print(f"找到 {len(news_list)} 条公告")
+
+              # 3. 过滤最近1小时、含「纪念币」的公告
               one_hour_ago = datetime.now() - timedelta(hours=1)
-              for entry in feed.entries[:5]:
+              for news in news_list[:5]:
                   try:
-                      pub_time = datetime(*entry.published_parsed[:6])
-                      if pub_time >= one_hour_ago and "纪念币" in entry.title:
+                      title_tag = news.find("a")
+                      title = title_tag.get_text(strip=True)
+                      link = "https://www.chngc.net" + title_tag["href"]
+                      date_str = news.find("span").get_text(strip=True)
+                      pub_time = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+
+                      if pub_time >= one_hour_ago and "纪念币" in title:
                           message = {
                               "msgtype": "text",
                               "text": {
-                                  "content": f"【纪念币新公告】\n标题：{entry.title}\n链接：{entry.link}"
+                                  "content": f"【纪念币新公告】\n标题：{title}\n链接：{link}"
                               }
                           }
                           requests.post(DINGTALK_WEBHOOK, json=message)
-                          print("已发送：" + entry.title)
+                          print("已发送：" + title)
                   except Exception as e:
-                      print(f"处理条目失败: {e}")
+                      print(f"处理公告失败: {e}")
                       continue
-                  
+
           except Exception as e:
               print(f"全局错误: {e}")
               exit()
