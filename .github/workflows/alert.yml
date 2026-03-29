@@ -1,7 +1,7 @@
 name: 纪念币公告定时提醒
 on:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: '0 */1 * * *'  # 每小时一次
   workflow_dispatch:
 
 jobs:
@@ -23,36 +23,25 @@ jobs:
           import requests
           from datetime import datetime, timedelta
 
-          # ===================== 配置 =====================
+          # 钉钉 Webhook
           DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=f24dfc9408ba6588956798311e637c66c248032c6b93f308b9843a59da75b008"
-          RSS_URL = "https://rsshub.app/chngc/notice?keyword=纪念币,预约,发行"
-          # =================================================
+          
+          # 官方稳定RSS源
+          RSS_URL = "https://www.pbc.gov.cn/goutongjiaoliu/146984/146990/index.rss"
 
-          # 请求头（防拦截）
-          headers = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Referer": "https://www.chngc.net/"
-          }
-
-          # 抓取数据
-          try:
-              response = requests.get(RSS_URL, headers=headers, timeout=10)
-              feed = feedparser.parse(response.content)
-          except:
-              print("网络请求失败")
-              exit()
-
+          # 获取数据
+          feed = feedparser.parse(RSS_URL)
           if feed.bozo:
-              print("RSS 解析失败")
+              print("获取数据失败")
               exit()
 
-          # 只发送最近1小时新消息
+          # 只发最近1小时的新公告
           one_hour_ago = datetime.now() - timedelta(hours=1)
 
           for entry in feed.entries[:3]:
               try:
                   pub_time = datetime(*entry.published_parsed[:6])
-                  if pub_time >= one_hour_ago:
+                  if pub_time >= one_hour_ago and "纪念币" in entry.title:
                       message = {
                           "msgtype": "text",
                           "text": {
